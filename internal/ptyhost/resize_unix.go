@@ -11,7 +11,6 @@ import (
 	"syscall"
 
 	gpty "github.com/aymanbagabas/go-pty"
-	"golang.org/x/term"
 )
 
 // watchResize resizes the PTY to match the host terminal whenever it changes,
@@ -21,9 +20,8 @@ func watchResize(ptmx gpty.Pty) {
 	signal.Notify(sigCh, syscall.SIGWINCH)
 	go func() {
 		for range sigCh {
-			if cols, rows, err := term.GetSize(int(os.Stdin.Fd())); err == nil {
-				ptmx.Resize(cols, rows)
-			}
+			cols, rows := hostTermSize()
+			ptmx.Resize(cols, rows)
 		}
 	}()
 }

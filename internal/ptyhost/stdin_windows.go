@@ -60,12 +60,6 @@ type keyEventRecord struct {
 	ControlKeyState uint32
 }
 
-// windowBufferSizeRecord matches Windows WINDOW_BUFFER_SIZE_RECORD (4 bytes)
-type windowBufferSizeRecord struct {
-	Cols int16
-	Rows int16
-}
-
 // inputRecord matches Windows INPUT_RECORD (20 bytes)
 type inputRecord struct {
 	EventType uint16
@@ -178,9 +172,13 @@ func startStdinForward(dst io.Writer, mu *sync.Mutex, resize func(cols, rows int
 				}
 			case eventWindowBufferSize:
 				if resize != nil {
-					sz := (*windowBufferSizeRecord)(unsafe.Pointer(&rec.Event[0]))
-					if sz.Cols > 0 && sz.Rows > 0 {
-						resize(int(sz.Cols), int(sz.Rows))
+					// The event record (dwSize) reports the screen *buffer*
+					// size, whose row count includes the full scrollback
+					// (cmd defaults to ~9001). Using it would make the PTY
+					// thousands of rows tall and corrupt every client redraw.
+					// Query the visible window size instead.
+					if cols, rows := hostTermSize(); cols > 0 && rows > 0 {
+						resize(cols, rows)
 					}
 				}
 			}

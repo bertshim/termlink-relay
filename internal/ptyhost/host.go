@@ -18,6 +18,21 @@ import (
 	"golang.org/x/term"
 )
 
+// hostTermSize returns the visible host terminal size. The console size must be
+// queried from the output (screen buffer) handle: on Windows the input handle is
+// not a screen buffer and GetConsoleScreenBufferInfo fails on it, which would
+// otherwise silently fall back to 80x24. Trying stdout first works on every
+// platform, with stdin and a default as fallbacks.
+func hostTermSize() (cols, rows int) {
+	if c, r, err := term.GetSize(int(os.Stdout.Fd())); err == nil && c > 0 && r > 0 {
+		return c, r
+	}
+	if c, r, err := term.GetSize(int(os.Stdin.Fd())); err == nil && c > 0 && r > 0 {
+		return c, r
+	}
+	return 80, 24
+}
+
 // Run connects a host. The relay allocates the session code and PIN and returns
 // them in the upgrade response; this host then displays them for clients to use.
 func Run(server string) {
@@ -59,11 +74,8 @@ func Run(server string) {
 	}
 
 	// Use the host terminal size as the initial PTY size.
-	if cols, rows, err := term.GetSize(fd); err == nil {
-		ptmx.Resize(cols, rows)
-	} else {
-		ptmx.Resize(80, 24)
-	}
+	cols, rows := hostTermSize()
+	ptmx.Resize(cols, rows)
 
 	// Keep the PTY sized to the host terminal (SIGWINCH on Unix; no-op on
 	// Windows, where resize arrives via console events in startStdinForward).
